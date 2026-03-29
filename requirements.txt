@@ -18,6 +18,7 @@ pillow
 pyyaml
 tqdm
 requests
+omegaconf
 
 # Testing
 gradio
