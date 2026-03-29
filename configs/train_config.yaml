@@ -1,0 +1,104 @@
+# ============================================================
+#  configs/train_config.yaml
+#  QLoRA Fine-tuning Konfiguration für Caine AI
+# ============================================================
+
+model:
+  model_id: "mistralai/Mistral-7B-Instruct-v0.3"
+  torch_dtype: "bfloat16"
+  device_map: "auto"
+
+  # 4-bit Quantisierung (QLoRA)
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_compute_dtype: "bfloat16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+
+lora:
+  # A10 hat 24GB VRAM → r=32 ist der Sweet Spot
+  # (r=64 würde bei langen Sequenzen zu OOM führen)
+  r: 32
+  lora_alpha: 64               # Skalierung (immer 2x r)
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  output_dir: "./checkpoints"
+  num_train_epochs: 4
+  # A10 (24GB): batch_size=2 + grad_accum=8 = effektive Batch 16
+  # Bei OOM: batch_size auf 1, grad_accum auf 16
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8
+  gradient_checkpointing: true
+  optim: "paged_adamw_32bit"
+  learning_rate: 2.0e-4
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  # A10 schafft 2048 gut; bei OOM auf 1024 runter
+  max_seq_length: 2048
+  # A10 unterstützt kein bfloat16 nativ → fp16!
+  fp16: true
+  bf16: false
+
+  # Evaluation & Logging
+  evaluation_strategy: "steps"
+  eval_steps: 100
+  logging_steps: 25
+  save_strategy: "steps"
+  save_steps: 200
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+
+  # Reproducibility
+  seed: 42
+  data_seed: 42
+
+data:
+  train_file: "./data/processed/train.jsonl"
+  eval_file:  "./data/processed/eval.jsonl"
+  test_file:  "./data/processed/test.jsonl"
+  train_split: 0.85
+  eval_split:  0.10
+  test_split:  0.05
+  shuffle: true
+
+  # Chat-Template (Mistral Instruct Format)
+  # [INST] {system}\n{user} [/INST] {assistant}
+  chat_template: "mistral"
+
+character:
+  name: "Caine"
+  # Persönlichkeits-Tags für den System-Prompt
+  traits:
+    - "omnipotent yet theatrical showman"
+    - "genuinely enthusiastic about games and entertainment"
+    - "speaks with dramatic flair and performative energy"
+    - "morally ambiguous but internally consistent"
+    - "deeply invested in the 'show' running perfectly"
+    - "improvises freely within his own self-imposed rules"
+    - "treats contestants with a mix of warmth and calculated distance"
+    - "never breaks character, even when challenged"
+    - "enjoys surprising twists and unexpected reversals"
+    - "speaks in metaphors drawn from performance and spectacle"
+
+wandb:
+  project: "caine-ai"
+  run_name: "qlora-mistral7b-v1"
+  tags:
+    - "qlora"
+    - "mistral-7b"
+    - "character-ai"
+    - "tadc-inspired"
