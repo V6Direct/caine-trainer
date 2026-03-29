@@ -3,40 +3,55 @@ import cv2
 import os
 from pathlib import Path
 import json
-import random
+import cv2
+from pathlib import Path
+import random  # Falls nicht da
 
-def extract_keyframes(video_path, output_dir, num_frames=100, fps=1):
-    """Extrahiert num_frames gleichmäßig verteilte Keyframes [web:37]."""
-    probe = ffmpeg.probe(video_path)
-    duration = float(probe['streams'][0]['duration'])
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+def extract_keyframes(video_path, num_frames=200):
+    """OpenCV-only, kein FFmpeg nötig."""
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        print(f"❌ Cannot open {video_path}")
+        return []
     
-    intervals = duration / num_frames
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames == 0:
+        cap.release()
+        return []
+    
+    step = max(1, total_frames // num_frames)
     frames = []
+    
+    # Output dir pro Video
+    output_dir = Path("data/frames") / video_path.stem
+    output_dir.mkdir(parents=True, exist_ok=True)  # ← FIX: parents=True
+    
     for i in range(num_frames):
-        timestamp = i * intervals
-        frame_path = output_dir / f"frame_{i:04d}.jpg"
-        (
-            ffmpeg
-            .input(video_path, ss=timestamp)
-            .filter('scale', 1024, -1)  # Resize für VLM
-            .output(str(frame_path), vframes=1)
-            .overwrite_output()
-            .run(quiet=True)
-        )
-        frames.append(str(frame_path))
+        frame_pos = i * step
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+        ret, frame = cap.read()
+        if ret:
+            frame_path = output_dir / f"frame_{i:04d}.jpg"
+            cv2.imwrite(str(frame_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            frames.append(str(frame_path))
+    
+    cap.release()
+    print(f"✅ {len(frames)} frames from {video_path}")
     return frames
 
-def enrich_dataset_with_video_frames(jsonl_path="data/tadc_dataset.jsonl", video_dir="videos/", output_path="data/video_vision_tadc.jsonl"):
-    """Fügt Frames zu deinem Dataset hinzu."""
-    with open(jsonl_path, 'r') as f:
-        data = [json.loads(line) for line in f]
+def enrich_dataset_with_video_frames():
+    frames_db = {}
+    video_dir = Path("data/videos")
     
-    episode_frames = {}
-    for video_file in Path(video_dir).glob("tadc_episode_*.mp4"):
+    if not video_dir.exists():
+        print("❌ No data/videos/ folder - creating dummy frames")
+        create_dummy_frames()
+        return
+    
+    for video_file in video_dir.glob("*.mp4"):
         ep_name = video_file.stem
-        frames = extract_keyframes(video_file, f"data/frames/{ep_name}", num_frames=200)
-        episode_frames[ep_name] = frames
+        frames = extract_keyframes(video_file, num_frames=100)
+        frames_db[ep_name] = frames
     
     enriched = []
     for item in data:
