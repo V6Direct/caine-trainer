@@ -137,6 +137,44 @@ backup:
 	@chmod +x scripts/backup_checkpoints.sh
 	@bash scripts/backup_checkpoints.sh
 
+	# -----------------------------------------------------------
+# Per-character training targets
+# -----------------------------------------------------------
+split:
+	@echo "✂️  Splitting dataset by character..."
+	$(PYTHON) scripts/split_by_character.py
+	@echo "✅ Split complete."
+
+train-caine:
+	@echo "🎪 Training Caine..."
+	$(PYTHON) src/train.py --config configs/caine.yaml --wandb_project $(WANDB_PROJ)
+
+train-bubble:
+	@echo "🫧 Training Bubble..."
+	$(PYTHON) src/train.py --config configs/bubble.yaml --wandb_project $(WANDB_PROJ)
+
+train-npcs:
+	@echo "🎭 Training NPCs..."
+	$(PYTHON) src/train.py --config configs/npcs.yaml --wandb_project $(WANDB_PROJ)
+
+train-all: train-caine train-bubble train-npcs
+	@echo "✅ All characters trained!"
+
+chat-caine:
+	$(PYTHON) src/chat.py --model_dir ./checkpoints/caine/final --system_prompt configs/caine_system_prompt.txt
+
+chat-bubble:
+	$(PYTHON) src/chat.py --model_dir ./checkpoints/bubble/final --system_prompt configs/bubble_system_prompt.txt
+
+debug-caine:
+	$(PYTHON) src/train.py --config configs/caine.yaml --max_samples 50 --num_epochs 1 --debug
+
+debug-bubble:
+	$(PYTHON) src/train.py --config configs/bubble.yaml --max_samples 30 --num_epochs 1 --debug
+
+debug-npcs:
+	$(PYTHON) src/train.py --config configs/npcs.yaml --max_samples 50 --num_epochs 1 --debug
+	
 help:
 	@echo ""
 	@echo "  Caine AI - Training Pipeline"
