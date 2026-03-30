@@ -3,6 +3,8 @@
 src/generate_synthetic.py
 Generiert synthetische Caine-Dialoge basierend auf Lore-Dokumenten.
 Nutzt die Anthropic API als "Teacher-Modell" um Trainingsdaten zu erzeugen.
+
+MODIFIED: Claude model ID updated to claude-haiku-4-5 (valid Oct 2025+)
 """
 
 import os
@@ -29,14 +31,11 @@ log = logging.getLogger("generate_synthetic")
 # ─── Szenarien für die Datengenerierung ───────────────────────────────────────
 
 SCENARIO_TEMPLATES = [
-    # Spielbeschreibungen
     "Explain the rules of a new, absurd game you've just invented for the contestants.",
     "Announce the start of a challenge in your most theatrical manner.",
     "React to a contestant unexpectedly succeeding at something you thought was impossible.",
     "React to a contestant dramatically failing at the simplest task.",
     "Introduce a sudden rule change mid-game with a smile.",
-
-    # Charakterinteraktion
     "A contestant demands to know who you really are and why you're doing this.",
     "A contestant refuses to participate. What do you say?",
     "Two contestants are arguing with each other. Step in as the host.",
@@ -45,8 +44,6 @@ SCENARIO_TEMPLATES = [
     "A contestant begs you to let them go home.",
     "A contestant asks if you actually care about them.",
     "A contestant says they trust you. Respond authentically as Caine.",
-
-    # Monologe & Narration
     "Narrate the beginning of a new episode to an unseen audience.",
     "Announce the elimination of a contestant dramatically.",
     "Give a speech about the purpose of the show.",
@@ -54,15 +51,11 @@ SCENARIO_TEMPLATES = [
     "React to something unexpected happening that you did NOT plan.",
     "Describe what happens when someone wins — or does anyone ever truly win?",
     "Muse philosophically about the nature of games and reality.",
-
-    # Kreativität & Worldbuilding
     "Describe a new area of the world the contestants have just entered.",
     "Explain an unusual power or ability you are demonstrating.",
     "Answer a question about how the world works without revealing too much.",
     "React to a contestant finding a loophole you didn't anticipate.",
     "Describe your favorite game you've ever hosted and why.",
-
-    # Dunklere Töne
     "A contestant accuses you of being cruel. Respond.",
     "Justify why the game must continue despite someone getting hurt.",
     "Deliver bad news to the contestants with your signature style.",
@@ -104,7 +97,6 @@ Rules for Caine's response:
 
 
 def load_lore(lore_file: Path) -> str:
-    """Lädt Lore-Dokument als Kontext."""
     if not lore_file.exists():
         log.warning(f"Lore-Datei nicht gefunden: {lore_file}")
         return ""
@@ -118,10 +110,6 @@ def generate_sample_via_api(
     api_key: str,
     retries: int = 3,
 ) -> Optional[dict]:
-    """
-    Ruft die Anthropic API auf, um einen synthetischen Dialog zu generieren.
-    Nutzt claude-3-5-haiku für Geschwindigkeit und Kosteneffizienz.
-    """
     import httpx
 
     prompt = f"""Lore context for this world:
@@ -138,7 +126,9 @@ Generate a realistic, in-character dialogue exchange for this scenario."""
         "content-type": "application/json",
     }
     payload = {
-        "model": "claude-haiku-4-5-20251001",
+        # [MODIFIED] Corrected model ID — claude-haiku-4-5 is the valid API name
+        # See: https://platform.claude.com/docs/about-claude/models/overview
+        "model": "claude-haiku-4-5",
         "max_tokens": 600,
         "system": SYSTEM_PROMPT_FOR_GENERATOR,
         "messages": [{"role": "user", "content": prompt}],
@@ -156,11 +146,9 @@ Generate a realistic, in-character dialogue exchange for this scenario."""
             data = resp.json()
             raw = data["content"][0]["text"].strip()
 
-            # JSON parsen
             raw = raw.replace("```json", "").replace("```", "").strip()
             parsed = json.loads(raw)
 
-            # Validierung
             required_keys = {"scenario", "contestant_name", "user_message", "caine_response"}
             if not required_keys.issubset(parsed.keys()):
                 log.warning(f"Unvollständiges JSON (Versuch {attempt+1}): {parsed.keys()}")
@@ -187,7 +175,6 @@ Generate a realistic, in-character dialogue exchange for this scenario."""
 
 
 def sample_to_mistral_format(sample: dict, system_prompt: str) -> dict:
-    """Konvertiert generierten Sample ins Mistral Chat-Format."""
     context = f"[Setting: {sample.get('scenario', '')}]"
     return {
         "messages": [
@@ -221,7 +208,6 @@ def main():
     lore = load_lore(args.lore_file)
     log.info(f"Lore geladen: {len(lore)} Zeichen")
 
-    # System-Prompt laden
     sp_path = Path("./configs/caine_system_prompt.txt")
     system_prompt = sp_path.read_text(encoding="utf-8").strip() if sp_path.exists() else ""
 
@@ -230,7 +216,6 @@ def main():
     generated = []
     failed = 0
 
-    # Szenarien zyklisch durchgehen + randomisieren
     scenarios = SCENARIO_TEMPLATES.copy()
     random.shuffle(scenarios)
     extended = (scenarios * ((args.num_samples // len(scenarios)) + 2))[:args.num_samples]
@@ -256,7 +241,6 @@ def main():
             if args.delay > 0:
                 time.sleep(args.delay)
 
-            # Progress-Log alle 50 Samples
             if (i + 1) % 50 == 0:
                 log.info(f"Fortschritt: {len(generated)} generiert, {failed} fehlgeschlagen")
 

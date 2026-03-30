@@ -1,0 +1,116 @@
+# ============================================================
+#  configs/train_config.yaml
+#  QLoRA Fine-tuning Konfiguration für Caine AI
+#  OPTIMIZED FOR: Single NVIDIA A10 (22GB VRAM)
+# ============================================================
+
+model:
+  model_id: "mistralai/Mistral-7B-Instruct-v0.3"
+  torch_dtype: "float16"   # fp16 — stable on A10 Ampere sm86
+  device_map: "auto"
+
+  # 4-bit Quantisierung (QLoRA)
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_compute_dtype: "float16"   # CHANGED from bfloat16 — A10 stable
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+
+lora:
+  # A10 (22GB): r=16 is the conservative sweet spot for 7B QLoRA
+  # Increase to r=32 only if you have >2000 samples and no OOM
+  r: 16
+  lora_alpha: 32               # always 2x r
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  output_dir: "./checkpoints"
+  num_train_epochs: 3
+
+  # A10 (22GB): batch=1 + grad_accum=8 = effective batch 8
+  # Do NOT increase batch_size to 2 on 2048 seq_len — will OOM
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  gradient_checkpointing: true
+
+  # paged_adamw_8bit saves ~1.5GB vs 32bit — strongly recommended on A10
+  optim: "paged_adamw_8bit"
+
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+
+  # 2048 works on A10 with packing + batch=1 + grad checkpointing
+  # Lower to 1024 if you still OOM
+  max_seq_length: 2048
+
+  # packing=true: fills context window with multiple short samples
+  # much faster for short chat dialogs (most Caine lines are <200 tokens)
+  packing: true
+
+  # fp16=true, bf16=false — required for A10 (Ampere sm86)
+  fp16: true
+  bf16: false
+
+  # Evaluation & Logging
+  evaluation_strategy: "steps"
+  eval_steps: 50
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 50
+  save_total_limit: 2          # keep only 2 checkpoints — saves disk
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+
+  # Reproducibility
+  seed: 42
+  data_seed: 42
+
+data:
+  train_file: "./data/processed/train.jsonl"
+  eval_file:  "./data/processed/eval.jsonl"
+  test_file:  "./data/processed/test.jsonl"
+  train_split: 0.85
+  eval_split:  0.10
+  test_split:  0.05
+  shuffle: true
+
+  # Chat-Template (Mistral Instruct Format)
+  # <s>[INST] {system}\n{user} [/INST] {assistant} </s>
+  chat_template: "mistral"
+
+character:
+  name: "Caine"
+  traits:
+    - "omnipotent yet theatrical showman"
+    - "genuinely enthusiastic about games and entertainment"
+    - "speaks with dramatic flair and performative energy"
+    - "morally ambiguous but internally consistent"
+    - "deeply invested in the 'show' running perfectly"
+    - "improvises freely within his own self-imposed rules"
+    - "treats contestants with a mix of warmth and calculated distance"
+    - "never breaks character, even when challenged"
+    - "enjoys surprising twists and unexpected reversals"
+    - "speaks in metaphors drawn from performance and spectacle"
+
+wandb:
+  project: "caine-ai"
+  run_name: "qlora-mistral7b-v1"
+  tags:
+    - "qlora"
+    - "mistral-7b"
+    - "character-ai"
+    - "tadc-inspired"
+    - "a10-22gb"

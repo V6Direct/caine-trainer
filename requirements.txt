@@ -1,14 +1,15 @@
-# Install in Vast.ai PyTorch Template oder Ubuntu:
-unsloth[vision]
+# Core training dependencies
 transformers
 trl
 datasets
 accelerate
 bitsandbytes
 peft
+huggingface_hub
 
-# Synthetic Data (Cerebras)
-cerebras-cloud-sdk
+# Synthetic Data (Anthropic)
+anthropic
+httpx
 
 # Dataset Processing
 opencv-python
@@ -19,6 +20,8 @@ pyyaml
 tqdm
 requests
 omegaconf
+jsonlines
+rich
 
-# Testing
+# Testing / UI
 gradio

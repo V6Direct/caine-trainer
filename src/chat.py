@@ -3,6 +3,9 @@
 src/chat.py
 Interaktiver Terminal-Chat mit dem Fine-tuned Caine-Modell.
 Zum lokalen Testen nach dem Training.
+
+MODIFIED: bfloat16 -> float16 for A10 consistency with training.
+MODIFIED: pad_token guard added.
 """
 
 import argparse
@@ -23,25 +26,39 @@ console = Console()
 
 def load_model(model_dir: Path, base_model_id: str = None):
     tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token
 
+    # [MODIFIED] Guard: only set pad_token if not already configured
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    # [MODIFIED] float16 instead of bfloat16 — matches A10 training dtype
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16,
         bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
     )
 
     adapter_config = model_dir / "adapter_config.json"
     if adapter_config.exists() and base_model_id:
+        # Load base model + attach LoRA adapter
         base = AutoModelForCausalLM.from_pretrained(
-            base_model_id, quantization_config=bnb_config,
-            device_map="auto", torch_dtype=torch.bfloat16,
+            base_model_id,
+            quantization_config=bnb_config,
+            device_map="auto",
+            torch_dtype=torch.float16,  # [MODIFIED] was bfloat16
+            trust_remote_code=True,
         )
         model = PeftModel.from_pretrained(base, model_dir)
     else:
+        # Load fully merged model directly
         model = AutoModelForCausalLM.from_pretrained(
-            model_dir, quantization_config=bnb_config,
-            device_map="auto", torch_dtype=torch.bfloat16,
+            model_dir,
+            quantization_config=bnb_config,
+            device_map="auto",
+            torch_dtype=torch.float16,  # [MODIFIED] was bfloat16
+            trust_remote_code=True,
         )
 
     model.eval()
@@ -89,7 +106,6 @@ def main():
                         help="Kein Gesprächsverlauf (jeder Turn unabhängig)")
     args = parser.parse_args()
 
-    # System-Prompt laden
     sp_path = Path(args.system_prompt)
     system_prompt = sp_path.read_text(encoding="utf-8").strip() if sp_path.exists() else \
         "You are Caine, theatrical host of a surreal game show."
@@ -106,7 +122,6 @@ def main():
     model, tokenizer = load_model(args.model_dir, args.base_model_id)
     console.print("[green]✅ Modell geladen![/green]\n")
 
-    # Gesprächsverlauf
     history: list[dict] = []
     temperature = args.temperature
 
@@ -120,7 +135,6 @@ def main():
         if not user_input:
             continue
 
-        # Befehle
         if user_input.lower() in ("exit", "quit"):
             console.print("[dim]Vorhang fällt. Auf Wiedersehen![/dim]")
             break
@@ -138,10 +152,8 @@ def main():
                 console.print("[red]Ungültige Temperatur.[/red]")
             continue
 
-        # Nachricht hinzufügen
         history.append({"role": "user", "content": user_input})
 
-        # Messages für diesen Turn bauen
         messages = [{"role": "system", "content": system_prompt}]
         if args.no_memory:
             messages.append({"role": "user", "content": user_input})
@@ -155,7 +167,7 @@ def main():
             top_p=args.top_p,
             max_new_tokens=args.max_new_tokens,
         )
-        console.print()  # Newline nach Stream
+        console.print()
 
         if not args.no_memory:
             history.append({"role": "assistant", "content": response})

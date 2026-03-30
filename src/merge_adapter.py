@@ -3,6 +3,9 @@
 src/merge_adapter.py
 Merged den trainierten LoRA-Adapter mit dem Basismodell
 zu einem vollständigen, standalone Modell (kein PEFT mehr nötig).
+
+MODIFIED: default dtype changed from bfloat16 to float16
+          to match A10 training setup.
 """
 
 import argparse
@@ -23,11 +26,13 @@ console = Console()
 
 def main():
     parser = argparse.ArgumentParser(description="LoRA-Adapter mit Basismodell mergen")
-    parser.add_argument("--base_model",   required=True, help="HF Model ID oder lokaler Pfad")
-    parser.add_argument("--adapter_dir",  required=True, type=Path)
-    parser.add_argument("--output_dir",   required=True, type=Path)
-    parser.add_argument("--dtype",        default="bfloat16",
-                        choices=["float16", "bfloat16", "float32"])
+    parser.add_argument("--base_model",  required=True, help="HF Model ID oder lokaler Pfad")
+    parser.add_argument("--adapter_dir", required=True, type=Path)
+    parser.add_argument("--output_dir",  required=True, type=Path)
+    # [MODIFIED] default changed from bfloat16 to float16 — matches A10 training dtype
+    parser.add_argument("--dtype",       default="float16",
+                        choices=["float16", "bfloat16", "float32"],
+                        help="float16 recommended for A10-trained adapters")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
