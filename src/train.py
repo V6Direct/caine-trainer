@@ -38,7 +38,8 @@ from transformers import (
     set_seed,
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import SFTTrainer
+from trl.trainer import DataCollatorForCompletionOnlyLM
 
 logging.basicConfig(
     level=logging.INFO,
@@ -216,7 +217,7 @@ def build_training_args(cfg, output_dir: str, wandb_project: str) -> TrainingArg
         bf16=False,
 
         # Evaluation + logging
-        evaluation_strategy=t.get("evaluation_strategy", "steps"),
+        eval_strategy=t.get("eval_strategy", "steps"),
         eval_steps=t.get("eval_steps", 50),
         logging_steps=t.get("logging_steps", 10),
         logging_first_step=True,               # [MODIFIED] Log step 0 to verify loss is finite
@@ -239,7 +240,7 @@ def build_training_args(cfg, output_dir: str, wandb_project: str) -> TrainingArg
         dataloader_pin_memory=True,
         # [MODIFIED] group_by_length=True clusters similar-length samples together,
         # reducing padding waste. Works well with packing=False.
-        group_by_length=True,
+    #         group_by_length=True,
 
         # [MODIFIED] ddp_find_unused_parameters=False — not using DDP, but
         # setting False avoids a warning with PEFT models.
@@ -313,6 +314,16 @@ def main():
         desc="Applying chat template (eval)",
     )
 
+
+    # Tokenize datasets manually
+    def tokenize(example):
+        result = tokenizer(example["text"], truncation=True, max_length=cfg.training.get("max_seq_length", 2048), padding=False)
+        result["labels"] = result["input_ids"].copy()
+        return result
+
+    train_dataset = train_dataset.map(tokenize, remove_columns=["text"], desc="Tokenizing train")
+    eval_dataset  = eval_dataset.map(tokenize,  remove_columns=["text"], desc="Tokenizing eval")
+
     # Training Args
     training_args = build_training_args(cfg, str(output_dir), wandb_project)
 
@@ -325,7 +336,7 @@ def main():
         tokenizer=tokenizer,
     )
 
-    # [MODIFIED] SFTTrainer with packing=True for better GPU utilization.
+    # [MODIFIED] SFTTrainer with packing=False for better GPU utilization.
     # Packing concatenates short samples to fill the full max_seq_length window,
     # reducing padding waste and speeding up training significantly on short dialogs.
     # If your dataset has very long samples (>512 tokens avg), set packing=False.
@@ -343,13 +354,13 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         peft_config=peft_config,
-        dataset_text_field="text",
         max_seq_length=cfg.training.get("max_seq_length", 2048),
-        tokenizer=tokenizer,
+
         args=training_args,
-        data_collator=active_collator,
+        data_collator=None,
         packing=use_packing,
     )
+    trainer.processing_class = tokenizer  # trl/transformers version mismatch workaround
 
     # Training starten
     console.rule("[bold green]🎪 Training startet — Vorhang auf für Caine!")
