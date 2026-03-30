@@ -6,6 +6,9 @@ import openai  # oder ollama/groq
 
 openai.api_key = "your-key-here"  # Oder lokal mit ollama
 
+parser.add_argument("--character",           default="Caine",  help="Character name to generate for")
+parser.add_argument("--system_prompt_file",  default="./configs/caine_system_prompt.txt")
+
 def load_caine_prompt():
     return Path("configs/caine_system_prompt.txt").read_text(encoding='utf-8')
 

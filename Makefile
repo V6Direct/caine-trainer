@@ -174,7 +174,25 @@ debug-bubble:
 
 debug-npcs:
 	$(PYTHON) src/train.py --config configs/npcs.yaml --max_samples 50 --num_epochs 1 --debug
-	
+
+
+	synthetic-caine:
+	@echo "🎪 Generating synthetic Caine data..."
+	$(PYTHON) src/generate_synthetic.py \
+		--lore_file $(DATA_DIR)/raw/lore.txt \
+		--output $(DATA_DIR)/synthetic/caine_synthetic.jsonl \
+		--num_samples 300 \
+		--character "Caine" \
+		--system_prompt_file configs/caine_system_prompt.txt
+
+synthetic-bubble:
+	@echo "🫧 Generating synthetic Bubble data..."
+	$(PYTHON) src/generate_synthetic.py \
+		--lore_file $(DATA_DIR)/raw/lore.txt \
+		--output $(DATA_DIR)/synthetic/bubble_synthetic.jsonl \
+		--num_samples 400 \
+		--character "Bubble" \
+		--system_prompt_file configs/bubble_system_prompt.txt
 help:
 	@echo ""
 	@echo "  Caine AI - Training Pipeline"
