@@ -70,6 +70,8 @@ data:
   train_file: "./data/processed/train.jsonl"
   eval_file:  "./data/processed/eval.jsonl"
   test_file:  "./data/processed/test.jsonl"
+  train_file: "./data/tadc_dataset.jsonl"
+  eval_file:  "./data/tadc_dataset.jsonl"
   train_split: 0.85
   eval_split:  0.10
   test_split:  0.05
